@@ -329,8 +329,14 @@ function toggleTheme(){
 }
 
 function checkAccess() {
-  // Modificado temporalmente para anular el bloqueo del PIN y poder editar la config
-  return true; 
+  if (ST.config && ST.config.pin && ST.config.pin.trim() !== "") {
+    const input = prompt("Ingrese el PIN de seguridad para confirmar esta acción:");
+    if (input !== ST.config.pin) {
+      alert("PIN incorrecto. Acción cancelada.");
+      return false;
+    }
+  }
+  return true;
 }
 
 function save(){
