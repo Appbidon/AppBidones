@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Bidones 1.0</title>
+<title>Bidones 1.6</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500;600&display=swap');
 :root{--bg:#F0F4F8;--sf:#FFF;--bd:#DDE3EC;--tx:#1A2332;--mu:#6B7A90;--ac:#1D6FE8;--acs:#E8F0FD;--ok:#15803D;--oks:#DCFCE7;--wn:#B45309;--wns:#FEF3C7;--dn:#DC2626;--dns:#FEE2E2;--r:12px;--rs:8px}
@@ -106,7 +106,7 @@ textarea{resize:vertical;min-height:64px}
 </style>
 </head>
 <body>
-<div class="sync-banner id="syncBan">⏳ Conectando con la base de datos persistente...</div>
+<div class="sync-banner" id="syncBan">⏳ Conectando con la base de datos...</div>
 <div class="app-header np">
   <h1>💧 Registro de Bidones</h1>
   <p id="fhoy"></p>
@@ -151,6 +151,8 @@ textarea{resize:vertical;min-height:64px}
   <div class="fg"><label class="fl">Teléfono</label><input type="tel" id="cfgT"></div>
   <div class="fg"><label class="fl">Notas (CUIT, dirección...)</label><textarea id="cfgNt"></textarea></div>
   <button class="btn bpri np" onclick="saveConfig()">Guardar datos</button>
+  <div class="stit" style="margin-top:22px">Seguridad de Edición</div>
+  <div class="fg"><label class="fl">PIN de Seguridad (Para Guardar/Eliminar)</label><input type="password" id="cfgPin" placeholder="Ej: 1234 (Dejar vacío para desactivar)"></div>
 </section>
 
 <section id="tab-resumen">
@@ -225,7 +227,7 @@ textarea{resize:vertical;min-height:64px}
 
   <div class="fg"><label class="fl">Notas (opcional)</label><textarea id="eNt" placeholder="Ej: dej retornables..."></textarea></div>
   <button class="btn bpri" onclick="saveE()">Guardar entrega</button>
-  <button class="btn bok2" id="btnPdfE" onclick="printE()" style="display:none">PDF de esta entrega</button>
+  <button class="btn bok2" id="btnPdfE" onclick="printE()" style="display:none">Imprimir Comprobante</button>
   <button class="btn bsec" onclick="closeMod('mE')">Cancelar</button>
   <button class="btn bdng" id="btnDelE" onclick="delE()" style="display:none">Eliminar</button>
 </div></div>
@@ -296,8 +298,6 @@ textarea{resize:vertical;min-height:64px}
 
 <script>
 const KEY='bidv3';
-// CONFIGURACIÓN DE BASE DE DATOS EN LA NUBE
-// En el paso siguiente pegaremos acá el enlace final de Google.
 const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzyfPVIY1rZFHUUCjxm4-q-5am3HVM0NkPsrl-B2bebOX6ZNzVGTVN8Rb3Bqq9LzRwP/exec"; 
 
 let ST={
@@ -309,12 +309,22 @@ let ST={
     {nom:'Bolsón dispenser',precio:500,uni:10},
     {nom:'Caja de tapas',precio:450,uni:10}
   ],
-  config:{nombre:'',tel:'',notas:''}
+  config:{nombre:'',tel:'',notas:'',pin:''}
 };
 let EI={e:null,c:null,ch:null,z:null,p:null};
 let pago='pagado',rendicion='no_rendido',comisionPago='pendiente',esYo=false,cDT=[],mesAct=new Date(),curTab='entregas';
 
-// SISTEMA DE ALMACENAMIENTO HÍBRIDO (LOCAL + RESPALDO NUBE AUTOMÁTICO)
+function checkAccess() {
+  if (ST.config && ST.config.pin) {
+    const input = prompt("Ingrese el PIN de seguridad para confirmar esta acción laboral:");
+    if (input !== ST.config.pin) {
+      alert("PIN incorrecto. Acción cancelada.");
+      return false;
+    }
+  }
+  return true;
+}
+
 function save(){
   localStorage.setItem(KEY,JSON.stringify(ST));
   if(WEB_APP_URL){
@@ -419,7 +429,6 @@ function calcSub(bultosGuardados){
   },0);
 }
 
-// CONTROLADOR DEL NUEVO FILTRO DE COMISIONES
 function onChCh(){
   const chi=document.getElementById('eCh').value;
   const container = document.getElementById('comisionContainer');
@@ -447,7 +456,7 @@ function onComTipoCh(){
   } else if(tipo === 'porcentaje'){
     row.style.display = 'block';
     lbl.textContent = 'Porcentaje (%) a asignar al chofer';
-    if(inp.value == 0 || inp.value > 100) inp.value = 10; // Valor inicial sugerido
+    if(inp.value == 0 || inp.value > 100) inp.value = 10;
   } else {
     row.style.display = 'block';
     lbl.textContent = 'Monto en Dinero ($) fijo para este viaje';
@@ -520,7 +529,6 @@ function openME(idx){
     setRendicion(e.rendicion||'no_rendido');
     setComisionPago(e.comisionPago||'pendiente');
     
-    // Cargar datos extendidos de comision
     document.getElementById('eComTipo').value = e.comisionTipo || 'fijo';
     document.getElementById('eComVal').value = e.comisionValRaw || 0;
     onChCh();
@@ -584,6 +592,7 @@ function setComisionPago(v){
 }
 
 function saveE(){
+  if(!checkAccess()) return;
   const fecha=document.getElementById('eFc').value;
   const ci=document.getElementById('eCl').value;
   const chi=document.getElementById('eCh').value;
@@ -618,6 +627,7 @@ function saveE(){
 }
 
 function delE(){
+  if(!checkAccess()) return;
   if(!confirm('Eliminar esta entrega?'))return;
   ST.entregas.splice(EI.e,1);save();closeMod('mE');renE();
 }
@@ -625,11 +635,25 @@ function delE(){
 function renE(){
   const f=(document.getElementById('fe').value||'').toLowerCase();
   const l=document.getElementById('lstE');
-  if(!ST.entregas.length){l.innerHTML='<div class="empty"><div class="ico">📦</div><p>Sin entregas todavía.<br>Toca + para agregar.</p></div>';return;}
-  l.innerHTML=ST.entregas.map((e,i)=>{
+  
+  let filtered = ST.entregas;
+  if(f){
+    filtered = ST.entregas.filter(e => {
+      const cn=ST.clientes[e.cI]?.nom||'';
+      return cn.toLowerCase().includes(f);
+    });
+  }
+  
+  if(!filtered.length){
+    l.innerHTML='<div class="empty"><div class="ico">📦</div><p>No se encontraron entregas.</p></div>';
+    return;
+  }
+  
+  l.innerHTML=filtered.map((e)=>{
+    // Buscar el índice real en el array global original de la entrega para poder editarla bien
+    const realIdx = ST.entregas.indexOf(e);
     const cn=ST.clientes[e.cI]?.nom||'Cliente eliminado';
     const ch=ST.choferes[e.chI]?.nom||'Sin chofer';
-    if(f&&!cn.toLowerCase().includes(f))return'';
     
     const badRend = e.rendicion==='rendido'?'<span class="badge bok">Flete Rendido</span>':'<span class="badge bwn">Flete No Rendido</span>';
     const badCom = e.comisionPago==='pagado'?'<span class="badge bbl">Comisión Paga</span>':'<span class="badge bdn">Comisión Pend.</span>';
@@ -639,7 +663,7 @@ function renE(){
       return (ST.productos[b.idx]?.nom||'?')+' x'+b.qty;
     }).join(' | ');
     const dir=e.dir?'<div class="ci">'+e.dir+'</div>':'';
-    return '<div class="card" onclick="openME('+i+')"><div class="ch"><div><div class="ct">'+cn+'</div><div class="cs">'+ch+' - <span class="tf">'+fmtD(e.fecha)+'</span></div>'+dir+'</div><div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end;">'+badRend+badCom+'</div></div><div class="dv"></div><div style="font-size:11px;color:var(--mu);margin-bottom:7px; line-height:1.4;">'+bs+'</div><div class="mr"><span class="lb">Mercadería Total</span><span class="vl">'+fmt(sub)+'</span></div>'+(e.flete?'<div class="mr"><span class="lb">Flete</span><span class="vl">'+fmt(e.flete)+'</span></div>':'')+'</div>';
+    return '<div class="card" onclick="openME('+realIdx+')"><div class="ch"><div><div class="ct">'+cn+'</div><div class="cs">'+ch+' - <span class="tf">'+fmtD(e.fecha)+'</span></div>'+dir+'</div><div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end;">'+badRend+badCom+'</div></div><div class="dv"></div><div style="font-size:11px;color:var(--mu);margin-bottom:7px; line-height:1.4;">'+bs+'</div><div class="mr"><span class="lb">Mercadería Total</span><span class="vl">'+fmt(sub)+'</span></div>'+(e.flete?'<div class="mr"><span class="lb">Flete</span><span class="vl">'+fmt(e.flete)+'</span></div>':'')+'</div>';
   }).join('');
 }
 
@@ -682,6 +706,7 @@ function renDT(){
   document.getElementById('cDL').innerHTML=cDT.map((d,i)=>'<div style="display:flex;align-items:center;gap:7px;margin-bottom:7px"><span class="dt" style="flex:1">'+d.addr+(d.precio?' - '+fmt(d.precio):'')+'</span><button class="sm sm-rd" onclick="rmDir('+i+')">X</button></div>').join('');
 }
 function saveC(){
+  if(!checkAccess()) return;
   const nom=document.getElementById('cNom').value.trim();
   if(!nom){alert('El nombre es obligatorio.');return;}
   const c={nom,tel:document.getElementById('cTel').value.trim(),mail:document.getElementById('cMail').value.trim(),notas:document.getElementById('cNot').value.trim(),dirs:[...cDT]};
@@ -689,17 +714,28 @@ function saveC(){
   save();closeMod('mC');renC();
 }
 function delC(){
+  if(!checkAccess()) return;
   if(!confirm('Eliminar este cliente?'))return;
   ST.clientes.splice(EI.c,1);save();closeMod('mC');renC();
 }
 function renC(){
   const f=(document.getElementById('fc').value||'').toLowerCase();
   const l=document.getElementById('lstC');
-  if(!ST.clientes.length){l.innerHTML='<div class="empty"><div class="ico">👤</div><p>Sin clientes todavía.</p></div>';return;}
-  l.innerHTML=ST.clientes.map((c,i)=>{
-    if(f&&!c.nom.toLowerCase().includes(f))return'';
+  
+  let filtered = ST.clientes;
+  if(f){
+    filtered = ST.clientes.filter(c => c.nom.toLowerCase().includes(f));
+  }
+  
+  if(!filtered.length){
+    l.innerHTML='<div class="empty"><div class="ico">👤</div><p>No se encontraron clientes.</p></div>';
+    return;
+  }
+  
+  l.innerHTML=filtered.map((c)=>{
+    const realIdx = ST.clientes.indexOf(c);
     const dirs=c.dirs.map(d=>'<span class="dt">'+d.addr+(d.precio?' '+fmt(d.precio):'')+'</span>').join('');
-    return'<div class="card"><div class="ch"><div><div class="ct">'+c.nom+'</div>'+(c.tel?'<div class="ci">'+c.tel+'</div>':'')+(c.mail?'<div class="ci">'+c.mail+'</div>':'')+'</div><button class="sm sm-bl" onclick="openMC('+i+')">Editar</button></div>'+(c.dirs.length?'<div style="margin-top:4px">'+dirs+'</div>':'')+(c.notas?'<div class="ci" style="margin-top:7px">'+c.notas+'</div>':'')+'</div>';
+    return'<div class="card"><div class="ch"><div><div class="ct">'+c.nom+'</div>'+(c.tel?'<div class="ci">'+c.tel+'</div>':'')+(c.mail?'<div class="ci">'+c.mail+'</div>':'')+'</div><button class="sm sm-bl" onclick="openMC('+realIdx+')">Editar</button></div>'+(c.dirs.length?'<div style="margin-top:4px">'+dirs+'</div>':'')+(c.notas?'<div class="ci" style="margin-top:7px">'+c.notas+'</div>':'')+'</div>';
   }).join('');
 }
 
@@ -718,13 +754,18 @@ function setYo(v){
   document.getElementById('chTG').style.display=v?'none':'block';
 }
 function saveCh(){
+  if(!checkAccess()) return;
   const nom=document.getElementById('chNom').value.trim();
   if(!nom){alert('Nombre obligatorio.');return;}
   const c={nom,tel:document.getElementById('chTel').value.trim(),tarifa:+document.getElementById('chTar').value||0,esYo};
   if(EI.ch!==null)ST.choferes[EI.ch]=c;else ST.choferes.push(c);
   save();closeMod('mCh');renCh();
 }
-function delCh(){if(!confirm('Eliminar este chofer?'))return;ST.choferes.splice(EI.ch,1);save();closeMod('mCh');renCh();}
+function delCh(){
+  if(!checkAccess()) return;
+  if(!confirm('Eliminar este chofer?'))return;
+  ST.choferes.splice(EI.ch,1);save();closeMod('mCh');renCh();
+}
 function renCh(){
   const l=document.getElementById('lstCh');
   if(!ST.choferes.length){l.innerHTML='<div class="empty"><div class="ico">🚚</div><p>Sin choferes cargados.</p></div>';return;}
@@ -740,17 +781,17 @@ function openMZ(idx){
   document.getElementById('mZ').classList.add('open');
 }
 function saveZ(){
+  if(!checkAccess()) return;
   const nom=document.getElementById('zNom').value.trim();
   if(!nom){alert('Nombre obligatorio.');return;}
   const z={nom,precio:+document.getElementById('zPrc').value||0};
   if(EI.z!==null)ST.zonas[EI.z]=z;else ST.zonas.push(z);
   save();closeMod('mZ');renZ();
 }
-function delZ(){if(!confirm('Eliminar zona?'))return;ST.zonas.splice(EI.z,1);save();closeMod('mZ');renZ();}
-function renZ(){
-  const l=document.getElementById('lstZ');
-  if(!ST.zonas.length){l.innerHTML='<div class="empty"><div class="ico">📍</div><p>Sin zonas cargadas.</p></div>';return;}
-  l.innerHTML=ST.zonas.map((z,i)=>'<div class="card"><div class="ch"><div><div class="ct">'+z.nom+'</div><div class="cs">'+fmt(z.precio)+'</div></div><button class="sm sm-bl" onclick="openMZ('+i+')">Editar</button></div></div>').join('');
+function delZ(){
+  if(!checkAccess()) return;
+  if(!confirm('Eliminar zona?'))return;
+  ST.zonas.splice(EI.z,1);save();closeMod('mZ');renZ();
 }
 
 function openMP(idx){
@@ -762,22 +803,38 @@ function openMP(idx){
   document.getElementById('mP').classList.add('open');
 }
 function saveP(){
+  if(!checkAccess()) return;
   const nom=document.getElementById('pNom').value.trim();
   if(!nom){alert('Nombre obligatorio.');return;}
   const p={nom,precio:+document.getElementById('pPrc').value||0,uni:10};
   if(EI.p!==null)ST.productos[EI.p]=p;else ST.productos.push(p);
   save();closeMod('mP');renCfg();
 }
-function delP(){if(!confirm('Eliminar este producto? No afecta entregas guardadas.'))return;ST.productos.splice(EI.p,1);save();closeMod('mP');renCfg();}
+function delP(){
+  if(!checkAccess()) return;
+  if(!confirm('Eliminar este producto? No afecta entregas guardadas.'))return;
+  ST.productos.splice(EI.p,1);save();closeMod('mP');renCfg();}
+function renZ(){
+  const l=document.getElementById('lstZ');
+  if(!ST.zonas.length){l.innerHTML='<div class="empty"><div class="ico">📍</div><p>Sin zonas cargadas.</p></div>';return;}
+  l.innerHTML=ST.zonas.map((z,i)=>'<div class="card"><div class="ch"><div><div class="ct">'+z.nom+'</div><div class="cs">'+fmt(z.precio)+'</div></div><button class="sm sm-bl" onclick="openMZ('+i+')">Editar</button></div></div>').join('');
+}
 function renCfg(){
   document.getElementById('lstP').innerHTML=ST.productos.map((p,i)=>'<div class="card"><div class="ch"><div><div class="ct">'+p.nom+'</div><div class="cs">'+fmt(p.precio)+' base por unidad individual (Bulto x10 = '+fmt(p.precio*10)+')</div></div><button class="sm sm-bl" onclick="openMP('+i+')">Editar</button></div></div>').join('');
-  const cfg=ST.config;
+  const cfg=ST.config || {};
   document.getElementById('cfgN').value=cfg.nombre||'';
   document.getElementById('cfgT').value=cfg.tel||'';
   document.getElementById('cfgNt').value=cfg.notas||'';
+  document.getElementById('cfgPin').value=cfg.pin||'';
 }
 function saveConfig(){
-  ST.config={nombre:document.getElementById('cfgN').value.trim(),tel:document.getElementById('cfgT').value.trim(),notas:document.getElementById('cfgNt').value.trim()};
+  if(!checkAccess()) return;
+  ST.config={
+    nombre:document.getElementById('cfgN').value.trim(),
+    tel:document.getElementById('cfgT').value.trim(),
+    notas:document.getElementById('cfgNt').value.trim(),
+    pin:document.getElementById('cfgPin').value.trim()
+  };
   save();alert('Datos guardados');
 }
 
@@ -801,7 +858,6 @@ function renRes(){
     
     const ch=ST.choferes[e.chI];
     if(ch && !ch.esYo){
-      // Usar comision especifica guardada en la entrega, o el valor por defecto si es vieja
       const tCom = e.comisionCalculada !== undefined ? e.comisionCalculada : (ch.tarifa||0);
       comisionesTotales += tCom;
       if(e.comisionPago === 'pagado') comisionesPagadas += tCom; else comisionesPendientes += tCom;
@@ -876,7 +932,7 @@ function printMes(){
     return '<tr><td>'+fmtD(e.fecha)+'</td><td>'+cn+'</td><td>'+bs+'</td><td style="text-align:right">'+fmt(sub)+'</td><td style="text-align:right">'+(e.flete?fmt(e.flete):'-')+'</td><td class="'+(e.rendicion==='rendido'?'pok':'pwn')+'">'+(e.rendicion==='rendido'?'Cobrado':'Pend.')+'</td></tr>';
   }).join('');
   
-  document.getElementById('pra').innerHTML='<h1 class="ptit">Resumen Comercial - '+mesN(mesAct)+'</h1><p class="psb">'+(cfg.nombre||'Distribuidora')+(cfg.tel?' - '+cfg.tel:'')+(cfg.notas?' - '+cfg.notas:'')+'</p><div class="pc"><table class="pt"><tr><th colspan="2">Totales Comerciales</th></tr><tr><td>Total líquido Mercadería</td><td style="text-align:right;font-weight:700">'+fmt(tM)+'</td></tr><tr><td>Fletes cobrados</td><td style="text-align:right">'+fmt(tFp)+'</td></tr><tr><td>Fletes pendientes de cobro</td><td style="text-align:right">'+fmt(tFpd)+'</td></tr><tr style="font-size:14px; background:#eef9f3;"><td style="color:#15803d; font-weight:bold;">TOTAL COMERCIAL FACTURADO</td><td style="text-align:right;color:#15803d;font-weight:700">'+fmt(tM+tFp)+'</td></tr></table></div><div class="pc"><table class="pt"><tr><th>Fecha</th><th>Cliente</th><th>Bultos</th><th>Mercadería</th><th>Flete</th><th>Estado Flete</th></tr>'+rows+'</table></div>';
+  document.getElementById('pra').innerHTML='<h1 class="ptit">Resumen Comercial - '+mesN(mesAct)+'</h1><p class="psb">'+(cfg.nombre||'Distribuidora')+(cfg.tel?' - '+cfg.tel:'')+(cfg.notas?' - '+cfg.notas:'')+'</p><div class="pc"><table class="pt"><tr><th colspan="2">Totales Comerciales</th></tr><tr><td>Total líquido Mercadería</td><td style="text-align:right;font-weight:700">'+fmt(tM)+'</td></tr><tr><td>Fletes cobrados</td><td style="text-align:right">'+fmt(tFp)+'</td></tr><tr><td>Fletes pendientes de cobro</td><td style="text-align:right">'+fmt(tFpd)+'</td></tr> <tr style="font-size:14px; background:#eef9f3;"><td style="color:#15803d; font-weight:bold;">TOTAL COMERCIAL FACTURADO</td><td style="text-align:right;color:#15803d;font-weight:700">'+fmt(tM+tFp)+'</td></tr></table></div><div class="pc"><table class="pt"><tr><th>Fecha</th><th>Cliente</th><th>Bultos</th><th>Mercadería</th><th>Flete</th><th>Estado Flete</th></tr>'+rows+'</table></div>';
   window.print();
 }
 
